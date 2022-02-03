@@ -14,46 +14,6 @@ import torch.nn.functional as F
 from torchmetrics.functional import accuracy
 
 
-class CIFAR10DataModule(pl.LightningDataModule):
-    def __init__(self, batch_size, num_workers: int = 1, data_dir: str = './'):
-        super().__init__()
-        self.data_dir = data_dir
-        self.num_workers = num_workers
-        self.batch_size = batch_size
-
-        self.transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-        ])
-
-        self.dims = (3, 32, 32)
-        self.num_classes = 10
-
-    def prepare_data(self) -> None:
-        # download if needed
-        CIFAR10(self.data_dir, train=True, download=True)
-        CIFAR10(self.data_dir, train=False, download=True)
-
-    def setup(self, stage: str = None) -> None:
-        # Assign train/val datasets for use in dataloaders
-        cifar_full = CIFAR10(self.data_dir, train=True,
-                             transform=self.transform)
-        self.cifar_train, self.cifar_val = random_split(
-            cifar_full, [45000, 5000])
-
-        self.cifar_test = CIFAR10(
-            self.data_dir, train=False, transform=self.transform)
-
-    def train_dataloader(self):
-        return DataLoader(self.cifar_train, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
-
-    def val_dataloader(self):
-        return DataLoader(self.cifar_val, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)
-
-    def test_dataloader(self):
-        return DataLoader(self.cifar_test, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)
-
-
 class ImagePredictionLogger(Callback):
     def __init__(self, val_samples, num_samples=10):
         super().__init__()
@@ -77,7 +37,7 @@ class ImagePredictionLogger(Callback):
 
 
 class LitModel(pl.LightningModule):
-    def __init__(self, input_shape, num_classes, learning_rate=2e-4, fc_activation=F.relu, top_k=None):
+    def __init__(self, input_shape, num_classes, learning_rate=2e-4, fc_activation=F.relu, top_k=None, opt_str='ADAM'):
         super().__init__()
 
         # log hyperparameters
@@ -85,6 +45,7 @@ class LitModel(pl.LightningModule):
         self.learning_rate = learning_rate
         self.fc_activation = fc_activation
         self.top_k = top_k
+        self.opt_str = opt_str
 
         self.conv1 = nn.Conv2d(3, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 32, 3, 1)
@@ -210,43 +171,12 @@ class LitModel(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        if self.opt_str == "ADAM":
+            optimizer = torch.optim.Adam(
+                self.parameters(), lr=self.learning_rate)
+        elif self.opt_str == "SGDM":
+            optimizer = torch.optim.SGD(
+                self.parameters(), lr=self.learning_rate, momentum=0.9)
+        else:
+            raise ValueError(f"Unknown optimizer {self.opt_str}")
         return optimizer
-
-
-if __name__ == "__main__":
-    # init data pipeline
-    dm = CIFAR10DataModule(batch_size=32, num_workers=1)
-    # need to call prepare_data and setup
-    dm.prepare_data()
-    dm.setup()
-
-    # Samples required by the custom ImagePredictionLogger callback to log image prediction
-    val_samples = next(iter(dm.val_dataloader()))
-    val_imgs, val_labels = val_samples[0], val_samples[1]
-    val_imgs.shape, val_labels.shape
-
-    # init model
-    model = LitModel(dm.size(), dm.num_classes)
-
-    # Initialize wandb logger
-    tags = [str(dm)]
-    wandb_logger = WandbLogger(
-        project="cifar10_cnn", job_type='train', tags=tags)
-
-    # init trainer
-    trainer = pl.Trainer(max_epochs=50,
-                         progress_bar_refresh_rate=20,
-                         gpus=1,
-                         logger=wandb_logger,
-                         callbacks=[ImagePredictionLogger(val_samples)],
-                         checkpoint_callback=ModelCheckpoint())
-
-    # Train!
-    trainer.fit(model, dm)
-
-    # Evaluate the model
-    trainer.test()
-
-    # Close wandb logger
-    wandb.finish()
