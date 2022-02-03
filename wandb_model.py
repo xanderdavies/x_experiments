@@ -55,7 +55,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
 
 
 class ImagePredictionLogger(Callback):
-    def __init__(self, val_samples, num_samples=32):
+    def __init__(self, val_samples, num_samples=10):
         super().__init__()
         self.num_samples = num_samples
         self.val_imgs, self.val_labels = val_samples
@@ -77,12 +77,14 @@ class ImagePredictionLogger(Callback):
 
 
 class LitModel(pl.LightningModule):
-    def __init__(self, input_shape, num_classes, learning_rate=2e-4):
+    def __init__(self, input_shape, num_classes, learning_rate=2e-4, fc_activation=F.relu, top_k=None):
         super().__init__()
 
         # log hyperparameters
         self.save_hyperparameters()
         self.learning_rate = learning_rate
+        self.fc_activation = fc_activation
+        self.top_k = top_k
 
         self.conv1 = nn.Conv2d(3, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 32, 3, 1)
@@ -121,9 +123,13 @@ class LitModel(pl.LightningModule):
         x = self._forward_features(x)
         x = x.view(x.size(0), -1)
         # also return the activations for each layer
-        x = F.relu(self.fc1(x))
+        x = self.fc_activation(self.fc1(x))
+        if self.top_k is not None:
+            x, _ = torch.topk(x, self.top_k)
         intermediate_activations.append(x)
-        x = F.relu(self.fc2(x))
+        x = self.fc_activation(self.fc2(x))
+        if self.top_k is not None:
+            x, _ = torch.topk(x, self.top_k)
         intermediate_activations.append(x)
         x = F.log_softmax(self.fc3(x), dim=1)
         return x, intermediate_activations
@@ -152,8 +158,8 @@ class LitModel(pl.LightningModule):
         self.log('val_loss', loss, prog_bar=True)
         self.log('val_acc', acc, prog_bar=True)
 
-        # log dead neurons
         self.log_dead_neurons(intermediate_activations)
+        self.log_avg_number_active_neurons(intermediate_activations)
 
         return loss
 
@@ -174,6 +180,21 @@ class LitModel(pl.LightningModule):
         self.logger.experiment.log({
             "fc1_dead_neuron_prevalence": fc1_dead_neurons_percent,
             "fc2_dead_neuron_prevalence": fc2_dead_neurons_percent,
+        })
+
+    def log_avg_number_active_neurons(self, intermediate_activations: List[torch.Tensor]):
+        fc1_activations, fc2_activations = intermediate_activations
+        fc1_activations = fc1_activations.detach().cpu().numpy()
+        fc2_activations = fc2_activations.detach().cpu().numpy()
+
+        # get the number of neurons that are active across batches
+        fc1_active_neurons = np.sum(fc1_activations > 0.1, axis=0)
+        fc2_active_neurons = np.sum(fc2_activations > 0.1, axis=0)
+
+        # log the average number of active neurons
+        self.logger.experiment.log({
+            "fc1_avg_active_neurons": np.mean(fc1_active_neurons),
+            "fc2_avg_active_neurons": np.mean(fc2_active_neurons),
         })
 
     def test_step(self, batch, batch_idx):
