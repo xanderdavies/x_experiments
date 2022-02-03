@@ -165,12 +165,12 @@ class LitModel(pl.LightningModule):
         fc2_activations = fc2_activations.detach().cpu().numpy()
 
         # get the dead neurons and divide total dead neurons (across batches) by the batch size * number of neurons in the layer
-        fc1_dead_neurons = np.sum(fc1_activations <= 0.1)
-        fc2_dead_neurons = np.sum(fc2_activations <= 0.1)
-        fc1_dead_neurons_percent = fc1_dead_neurons / \
-            (fc1_activations.shape[0] * fc1_activations.shape[1])
-        fc2_dead_neurons_percent = fc2_dead_neurons / \
-            (fc2_activations.shape[0] * fc2_activations.shape[1])
+        fc1_activity_per_neuron = fc1_activations.sum(axis=0)
+        fc2_activity_per_neuron = fc2_activations.sum(axis=0)
+        fc1_dead_neurons = np.sum(fc1_activity_per_neuron <= 0.1)
+        fc2_dead_neurons = np.sum(fc2_activity_per_neuron <= 0.1)
+        fc1_dead_neurons_percent = fc1_dead_neurons / fc1_activations.shape[1]
+        fc2_dead_neurons_percent = fc2_dead_neurons / fc1_activations.shape[1]
 
         # log the dead neurons
         self.logger.experiment.log({
