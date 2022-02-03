@@ -5,8 +5,7 @@ from torch.utils.data import random_split
 from torch.utils.data import DataLoader
 
 
-@enumerate
-class DataSet:
+class DataSet(enumerate):
     CIFAR10 = 0
 
 
