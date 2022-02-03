@@ -13,7 +13,7 @@ from torchmetrics.functional import accuracy
 
 
 class CIFAR10DataModule(pl.LightningDataModule):
-    def __init__(self, batch_size, num_workers: int = 4, data_dir: str = './'):
+    def __init__(self, batch_size, num_workers: int = 1, data_dir: str = './'):
         super().__init__()
         self.data_dir = data_dir
         self.num_workers = num_workers
@@ -169,7 +169,7 @@ class LitModel(pl.LightningModule):
 
 if __name__ == "__main__":
     # init data pipeline
-    dm = CIFAR10DataModule(batch_size=32, num_workers=4)
+    dm = CIFAR10DataModule(batch_size=32, num_workers=1)
     # need to call prepare_data and setup
     dm.prepare_data()
     dm.setup()
