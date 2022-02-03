@@ -168,8 +168,8 @@ class LitModel(pl.LightningModule):
         fc2_dead_neurons = np.where(fc2_activations < 0.1)
         # log the dead neurons
         self.logger.experiment.log({
-            "fc1_dead_neuron_prevalence": fc1_dead_neurons[0]/fc1_activations.size,
-            "fc2_dead_neuron_prevalence": fc2_dead_neurons[0]/fc2_activations.size,
+            "fc1_dead_neuron_prevalence": fc1_dead_neurons[0].shape[0] / fc1_activations.shape[1],
+            "fc2_dead_neuron_prevalence": fc2_dead_neurons[0].shape[0] / fc2_activations.shape[1],
         })
 
     def test_step(self, batch, batch_idx):
