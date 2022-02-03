@@ -164,19 +164,18 @@ class LitModel(pl.LightningModule):
         fc1_activations = fc1_activations.detach().cpu().numpy()
         fc2_activations = fc2_activations.detach().cpu().numpy()
 
-        print(f"fc1 activations shape: {fc1_activations.shape}")
-        print(f"fc2 activations shape: {fc2_activations.shape}")
+        # get the dead neurons and divide total dead neurons (across batches) by the batch size * number of neurons in the layer
+        fc1_dead_neurons = np.sum(fc1_activations <= 0.1)
+        fc2_dead_neurons = np.sum(fc2_activations <= 0.1)
+        fc1_dead_neurons_percent = fc1_dead_neurons / \
+            (fc1_activations.shape[0] * fc1_activations.shape[1])
+        fc2_dead_neurons_percent = fc2_dead_neurons / \
+            (fc2_activations.shape[0] * fc2_activations.shape[1])
 
-        # get the dead neurons
-        fc1_dead_neurons = np.where(fc1_activations < 0.1)
-        fc2_dead_neurons = np.where(fc2_activations < 0.1)
-
-        print(f"fc1 dead neurons: {fc1_dead_neurons.shape}")
-        print(f"fc2 dead neurons: {fc2_dead_neurons.shape}")
         # log the dead neurons
         self.logger.experiment.log({
-            "fc1_dead_neuron_prevalence": fc1_dead_neurons[0].shape[0] / fc1_activations.shape[0],
-            "fc2_dead_neuron_prevalence": fc2_dead_neurons[0].shape[0] / fc2_activations.shape[0],
+            "fc1_dead_neuron_prevalence": fc1_dead_neurons_percent,
+            "fc2_dead_neuron_prevalence": fc2_dead_neurons_percent,
         })
 
     def test_step(self, batch, batch_idx):
