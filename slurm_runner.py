@@ -1,5 +1,5 @@
 # Running multiple experiments, have to be on different GPUs each. Used for SLURM.
-from data_modules import DataSet
+from data_modules import CIFAR10DataModule, DataSet
 import pytorch_lightning as pl
 import wandb
 from pytorch_lightning.callbacks import ModelCheckpoint
