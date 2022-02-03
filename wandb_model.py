@@ -28,16 +28,17 @@ class ImagePredictionLogger(Callback):
         logits, _ = pl_module(val_imgs)
         preds = torch.argmax(logits, -1)
         # Log the images as wandb Image
-        trainer.logger.experiment.log({
-            "examples": [wandb.Image(x, caption=f"Pred:{pred}, Label:{y}")
-                         for x, pred, y in zip(val_imgs[:self.num_samples],
-                                               preds[:self.num_samples],
-                                               val_labels[:self.num_samples])]
-        })
+        if pl_module.log_images:
+            trainer.logger.experiment.log({
+                "examples": [wandb.Image(x, caption=f"Pred:{pred}, Label:{y}")
+                             for x, pred, y in zip(val_imgs[:self.num_samples],
+                                                   preds[:self.num_samples],
+                                                   val_labels[:self.num_samples])]
+            })
 
 
 class LitModel(pl.LightningModule):
-    def __init__(self, input_shape, num_classes, learning_rate=2e-4, fc_activation=F.relu, top_k=None, opt_str='ADAM'):
+    def __init__(self, input_shape, num_classes, learning_rate=2e-4, fc_activation=F.relu, top_k=None, opt_str='ADAM', log_images=False):
         super().__init__()
 
         # log hyperparameters
@@ -46,6 +47,7 @@ class LitModel(pl.LightningModule):
         self.fc_activation = fc_activation
         self.top_k = top_k
         self.opt_str = opt_str
+        self.log_images = log_images
 
         self.conv1 = nn.Conv2d(3, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 32, 3, 1)
