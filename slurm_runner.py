@@ -68,7 +68,7 @@ def train_func():
                      fc_activation=exp["fc_activation"],
                      opt_str=exp["opt"])
     tags = [str(exp['dataset']), exp['opt'],
-            exp['fc_activation'].__name__, exp['top_k']]
+            exp['fc_activation'].__name__, str(exp['top_k'])]
     wandb_logger = WandbLogger(
         project="cifar10_cnn", job_type='train', tags=tags)
 
