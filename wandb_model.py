@@ -192,8 +192,7 @@ if __name__ == "__main__":
                          progress_bar_refresh_rate=20,
                          gpus=1,
                          logger=wandb_logger,
-                         callbacks=[EarlyStopping(),
-                                    ImagePredictionLogger(val_samples)],
+                         callbacks=[ImagePredictionLogger(val_samples)],
                          checkpoint_callback=ModelCheckpoint())
 
     # Train!
