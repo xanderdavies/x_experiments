@@ -6,7 +6,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 import argparse
 import torch.nn.functional as F
-from wandb_model import CIFAR10DataModule, ImagePredictionLogger, LitModel
+from wandb_model import ImagePredictionLogger, LitModel
 
 ########### EXPERIMENTS TO RUN ##############
 
