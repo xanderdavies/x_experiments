@@ -1,3 +1,5 @@
+from typing import List
+import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 import torch
@@ -5,7 +7,7 @@ from torchvision import transforms
 from torchvision.datasets import CIFAR10
 from torch.utils.data import random_split
 from torch.utils.data import DataLoader
-from pytorch_lightning.callbacks import Callback, EarlyStopping, ModelCheckpoint
+from pytorch_lightning.callbacks import Callback, ModelCheckpoint
 import wandb
 import torch.nn as nn
 import torch.nn.functional as F
@@ -65,7 +67,7 @@ class ImagePredictionLogger(Callback):
         val_imgs = self.val_imgs.to(device=pl_module.device)
         val_labels = self.val_labels.to(device=pl_module.device)
         # get the predictions
-        logits = pl_module(val_imgs)
+        logits, _ = pl_module(val_imgs)
         preds = torch.argmax(logits, -1)
         # Log the images as wandb Image
         trainer.logger.experiment.log({
@@ -117,17 +119,20 @@ class LitModel(pl.LightningModule):
 
     # will be used during inference
     def forward(self, x):
+        intermediate_activations = []
         x = self._forward_features(x)
         x = x.view(x.size(0), -1)
+        # also return the activations for each layer
         x = F.relu(self.fc1(x))
+        intermediate_activations.append(x)
         x = F.relu(self.fc2(x))
+        intermediate_activations.append(x)
         x = F.log_softmax(self.fc3(x), dim=1)
-
-        return x
+        return x, intermediate_activations
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        logits = self.forward(x)
+        logits, _ = self.forward(x)
         loss = F.nll_loss(logits, y)
 
         # training metrics
@@ -140,7 +145,7 @@ class LitModel(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        logits = self.forward(x)
+        logits, intermediate_activations = self.forward(x)
         loss = F.nll_loss(logits, y)
 
         # validation metrics
@@ -148,11 +153,28 @@ class LitModel(pl.LightningModule):
         acc = accuracy(preds, y)
         self.log('val_loss', loss, prog_bar=True)
         self.log('val_acc', acc, prog_bar=True)
+
+        # log dead neurons
+        self.log_dead_neurons(intermediate_activations)
+
         return loss
+
+    def log_dead_neurons(self, intermediate_activations: List[torch.Tensor]):
+        fc1_activations, fc2_activations = intermediate_activations
+        fc1_activations = fc1_activations.detach().cpu().numpy()
+        fc2_activations = fc2_activations.detach().cpu().numpy()
+        # get the dead neurons
+        fc1_dead_neurons = np.where(fc1_activations < 0.1)
+        fc2_dead_neurons = np.where(fc2_activations < 0.1)
+        # log the dead neurons
+        self.logger.experiment.log({
+            "fc1_dead_neuron_prevalence": fc1_dead_neurons[0]/fc1_activations.size,
+            "fc2_dead_neuron_prevalence": fc2_dead_neurons[0]/fc2_activations.size,
+        })
 
     def test_step(self, batch, batch_idx):
         x, y = batch
-        logits = self.forward(x)
+        logits, _ = self.forward(x)
         loss = F.nll_loss(logits, y)
 
         # test metrics
